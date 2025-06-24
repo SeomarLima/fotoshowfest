@@ -136,7 +136,7 @@ async function iniciarBumerangue() {
   const canvasVideo = document.createElement("canvas");
   const ctx = canvasVideo.getContext("2d");
 
-  const fps = 60;
+  const fps = 30;
   const duration = 2;
   const totalFrames = fps * duration;
   const frames = [];
