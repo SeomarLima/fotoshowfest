@@ -197,7 +197,7 @@ async function iniciarBumerangue() {
 
   for (const frame of finalFrames) {
     ctx.putImageData(frame, 0, 0);
-    await new Promise(r => setTimeout(r, 1000 / (fps * 2))); // acelera o playback
+    await new Promise(r => setTimeout(r, 1000 / (fps * 1))); // acelera o playback
   }
 
   recorder.stop();
