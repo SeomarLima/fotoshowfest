@@ -187,44 +187,85 @@ function dataURLtoBlob(dataurl) {
     u8arr[i] = bstr.charCodeAt(i);
   }
   return new Blob([u8arr], { type: mime });
+}// Conversão WebM → MP4
+async function converterParaMP4(webmBlob) {
+  const { createFFmpeg } = FFmpeg;
+  const ffmpeg = createFFmpeg({ log: true });
+  await ffmpeg.load();
+
+  ffmpeg.FS('writeFile', 'input.webm', new Uint8Array(await webmBlob.arrayBuffer()));
+  await ffmpeg.run(
+    '-i', 'input.webm',
+    '-c:v', 'libx264',
+    '-profile:v', 'baseline',
+    '-pix_fmt', 'yuv420p',
+    'output.mp4'
+  );
+
+  const data = ffmpeg.FS('readFile', 'output.mp4');
+  return new Blob([data.buffer], { type: 'video/mp4' });
 }
 
-function mostrarErro(mensagem) {
-  qrDiv.innerHTML = `<p style="color:red">${mensagem}</p>`;
-  statusUpload.style.display = 'none';
+// Download local de imagem
+function baixarImagemLocal(dataUrl) {
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = `foto_showfest_${Date.now()}.png`;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => document.body.removeChild(link), 100);
 }
 
-function iniciarCamera() {
-  navigator.mediaDevices.getUserMedia({
-    video: { width: 1920, height: 1080, facingMode: 'user' },
-    audio: false
-  }).then(s => {
-    stream = s;
-    video.srcObject = stream;
-  }).catch(err => {
-    console.error("Erro na câmera:", err);
-  });
+// Download local de vídeo
+function baixarVideoLocal(url, nome) {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nome;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+  }, 100);
 }
 
-function criarBotaoCancelar() {
-  const btn = document.createElement('button');
-  btn.id = 'cancelBtn';
-  btn.textContent = '✖ Cancelar';
-  btn.style.cssText = `
-    display: none;
-    background: #ff4444;
-    color: white;
-    padding: 10px 15px;
-    border: none;
-    border-radius: 5px;
-    margin: 10px auto;
-    cursor: pointer;
-  `;
-  btn.onclick = () => {
-    cancelRecording = true;
-    if (mediaRecorder?.state !== 'inactive') mediaRecorder.stop();
-    document.getElementById('contador').innerText = '';
-    btn.style.display = 'none';
-  };
-  document.body.appendChild(btn);
+// Geração de QR Code
+function gerarQRCode(url) {
+  qrDiv.innerHTML = `
+// === CONVERSÃO PARA MP4 E QR CODE (via GoFile) ===
+async function converterParaMP4(blob) {
+  statusUpload.innerText = "Enviando vídeo para o servidor...";
+  statusUpload.style.display = "block";
+  contador.innerText = "";
+
+  try {
+    const formData = new FormData();
+    const filename = `bumerangue_showfest_${Date.now()}.webm`;
+    formData.append("file", blob, filename);
+
+    const uploadRes = await fetch("https://store1.gofile.io/uploadFile", {
+      method: "POST",
+      body: formData
+    });
+    const result = await uploadRes.json();
+
+    if (!result?.data?.downloadPage) {
+      throw new Error("Falha no upload");
+    }
+
+    const downloadPage = result.data.downloadPage;
+    const viewerURL = `https://fotoshowfest.vercel.app/viewer.html?file=${encodeURIComponent(downloadPage)}`;
+
+    gerarQRCode(viewerURL);
+    contador.innerText = "Pronto!";
+  } catch (err) {
+    console.error("Erro no GoFile:", err);
+    contador.innerText = "Erro ao enviar";
+    statusUpload.innerText = "Falha no upload.";
+    qrDiv.innerHTML = `<p style="color:red">Erro ao enviar. Tente novamente.</p>`;
+  } finally {
+    statusUpload.style.display = "none";
+  }
 }
