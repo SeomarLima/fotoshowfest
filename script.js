@@ -40,7 +40,7 @@ async function enviarParaGoFile(blob, tipo) {
     const { data: { server } } = await serverRes.json();
 
     // Preparar arquivo
-    const extensao = tipo === 'foto' ? 'png' : 'mp4';
+    const extensao = tipo === 'foto' ? 'png' : (tipo === 'webm' ? 'webm' : 'mp4');
     const formData = new FormData();
     formData.append('file', blob, `showfest_${Date.now()}.${extensao}`);
 
