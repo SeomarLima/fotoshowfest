@@ -2,188 +2,133 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
+  <title>Baixar Bumerangue - Show Fest</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Foto Show Fest</title>
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
-  <script src="https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js"></script>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #000;
+      color: #FFD700;
+      text-align: center;
+      padding: 20px;
+      margin: 0;
+    }
+    .video-container {
+      margin: 20px auto;
+      max-width: 90%;
+    }
+    video {
+      width: 100%;
+      border-radius: 15px;
+      background: #111;
+    }
+    .instructions {
+      margin: 20px 0;
+      padding: 15px;
+      background: rgba(255, 215, 0, 0.1);
+      border-radius: 10px;
+      border: 1px solid #FFD700;
+    }
+    .loading {
+      margin: 40px 0;
+      font-size: 1.2em;
+      color: #FFD700;
+    }
+    .error {
+      color: #ff4444;
+      margin: 20px;
+    }
+    .success {
+      color: #4CAF50;
+    }
+  </style>
 </head>
 <body>
-  <!-- Elementos HTML (mantenha os existentes) -->
-  <div id="statusUpload"></div>
-  <div id="qrDownload"></div>
-  <video id="camera" autoplay playsinline></video>
-  <canvas id="canvas" style="display:none;"></canvas>
+  <h2>Seu Bumerangue</h2>
+  <div class="video-container">
+    <video id="video" controls playsinline></video>
+    <div id="loading" class="loading">Carregando seu vídeo...</div>
+    <div id="error" class="error" style="display:none;"></div>
+  </div>
+
+  <div id="ios-instructions" class="instructions" style="display:none;">
+    <h3>Como salvar no seu iPhone:</h3>
+    <p>1. Toque no vídeo para reproduzir</p>
+    <p>2. Toque e segure no vídeo</p>
+    <p>3. Selecione <strong>"Salvar Vídeo"</strong></p>
+  </div>
+
+  <div id="success-message" class="success" style="display:none;">
+    Vídeo carregado com sucesso!
+  </div>
 
   <script>
-    // ========== [CORREÇÃO 1/5] DECLARAÇÃO DE VARIÁVEIS AUSENTES ==========
-    const statusUpload = document.getElementById("statusUpload");
-    const qrDiv = document.getElementById("qrDownload");
-    const video = document.getElementById("camera");
-    const canvas = document.getElementById("canvas");
-    let mediaRecorder;
-    let chunks = [];
-
-    // ========== [CORREÇÃO 2/5] INICIALIZAÇÃO CORRETA DO FFMPEG ==========
-    const { createFFmpeg } = FFmpeg;
-    const ffmpeg = createFFmpeg({ log: true });
-    let ffmpegLoaded = false;
-
-    // ========== [CORREÇÃO 3/5] FUNÇÃO SCROLLTOLEMENT AUSENTE ==========
-    function scrollToElement(element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Detectar se é iPhone/iOS
+    function isIOS() {
+      return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+             (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     }
 
-    // ========== [CORREÇÃO 4/5] FUNÇÃO BAIXARIMAGEM AUSENTE ==========
-    function baixarImagem(dataUrl) {
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `foto_showfest_${Date.now()}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    // Obter URL do vídeo dos parâmetros
+    function getVideoUrl() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('url');
     }
 
-    // Configurações do Bumerangue
-    const BOOMERANG_SETTINGS = { 
-      width: 540, 
-      height: 960, 
-      fps: 30, 
-      duration: 2 
-    };
-
-    // ========== FUNÇÕES PRINCIPAIS ==========
-    async function initFFmpeg() {
-      if (!ffmpegLoaded) {
-        statusUpload.innerText = "Carregando conversor de vídeo...";
-        statusUpload.style.display = "block";
-        await ffmpeg.load();
-        ffmpegLoaded = true;
-        statusUpload.style.display = "none";
-      }
-    }
-
-    async function convertToMP4(webmBlob) {
-      await initFFmpeg();
-      const inputName = 'input.webm';
-      const outputName = 'output.mp4';
-
-      ffmpeg.FS('writeFile', inputName, new Uint8Array(await webmBlob.arrayBuffer()));
+    // Quando a página carregar
+    document.addEventListener('DOMContentLoaded', async () => {
+      const videoUrl = getVideoUrl();
+      const videoElement = document.getElementById('video');
+      const loadingElement = document.getElementById('loading');
+      const errorElement = document.getElementById('error');
+      const iosInstructions = document.getElementById('ios-instructions');
+      const successMessage = document.getElementById('success-message');
       
-      await ffmpeg.run(
-        '-i', inputName,
-        '-c:v', 'libx264',
-        '-profile:v', 'baseline',
-        '-pix_fmt', 'yuv420p',
-        '-movflags', '+faststart',
-        outputName
-      );
+      if (!videoUrl) {
+        errorElement.textContent = 'Link do vídeo não encontrado.';
+        errorElement.style.display = 'block';
+        loadingElement.style.display = 'none';
+        return;
+      }
 
-      const data = ffmpeg.FS('readFile', outputName);
-      return new Blob([data.buffer], { type: 'video/mp4' });
-    }
-
-    async function uploadToGoFile(blob, type) {
-      statusUpload.innerText = `Enviando ${type}...`;
-      statusUpload.style.display = "block";
+      // Mostrar instruções específicas para iOS
+      if (isIOS()) {
+        iosInstructions.style.display = 'block';
+      }
 
       try {
-        const extension = type === 'video' ? 'mp4' : 'png';
-        const formData = new FormData();
-        formData.append('file', blob, `showfest_${Date.now()}.${extension}`);
-
-        const serverRes = await fetch('https://api.gofile.io/getServer');
-        const { data: { server } } = await serverRes.json();
-
-        const uploadRes = await fetch(`https://${server}.gofile.io/uploadFile`, {
-          method: 'POST',
-          body: formData
+        // Configurar o vídeo
+        videoElement.src = videoUrl;
+        
+        // Quando o vídeo carregar
+        videoElement.addEventListener('loadeddata', () => {
+          loadingElement.style.display = 'none';
+          successMessage.style.display = 'block';
+          
+          // Tentar reproduzir (pode não funcionar sem interação do usuário)
+          videoElement.play().catch(e => {
+            console.log('Auto-play bloqueado:', e);
+          });
         });
 
-        const { data } = await uploadRes.json();
-        return data.downloadPage;
+        // Quando o vídeo for reproduzido (para iOS)
+        videoElement.addEventListener('play', () => {
+          console.log('Vídeo pronto para interação');
+        });
 
-      } finally {
-        statusUpload.style.display = "none";
-      }
-    }
-
-    // ========== [CORREÇÃO 5/5] INICIALIZAÇÃO CORRETA DO MEDIARECORDER ==========
-    function iniciarGravacaoBumerangue() {
-      chunks = [];
-      const canvasVideo = document.createElement('canvas');
-      canvasVideo.width = BOOMERANG_SETTINGS.width;
-      canvasVideo.height = BOOMERANG_SETTINGS.height;
-      const stream = canvasVideo.captureStream(BOOMERANG_SETTINGS.fps);
-      
-      mediaRecorder = new MediaRecorder(stream, { 
-        mimeType: 'video/webm;codecs=vp9' 
-      });
-
-      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
-      mediaRecorder.onstop = () => processBoomerang(chunks);
-      mediaRecorder.start();
-    }
-
-    async function processBoomerang(chunks) {
-      try {
-        const webmBlob = new Blob(chunks, { type: 'video/webm' });
-        statusUpload.innerText = "Convertendo para MP4...";
-        statusUpload.style.display = "block";
-        
-        const mp4Blob = await convertToMP4(webmBlob);
-        const downloadUrl = await uploadToGoFile(mp4Blob, 'video');
-        gerarQRCode(downloadUrl);
+        // Tratamento de erros
+        videoElement.addEventListener('error', () => {
+          loadingElement.style.display = 'none';
+          errorElement.textContent = 'Erro ao carregar o vídeo. Tente novamente.';
+          errorElement.style.display = 'block';
+        });
 
       } catch (error) {
-        console.error("Erro:", error);
-        qrDiv.innerHTML = `<p style="color:red">Erro ao processar vídeo</p>`;
+        loadingElement.style.display = 'none';
+        errorElement.textContent = 'Erro: ' + error.message;
+        errorElement.style.display = 'block';
       }
-    }
-
-    async function processPhoto(imgData) {
-      const blob = dataURLtoBlob(imgData);
-      const downloadUrl = await uploadToGoFile(blob, 'image');
-      gerarQRCode(downloadUrl);
-      baixarImagem(imgData);
-    }
-
-    function dataURLtoBlob(dataurl) {
-      const arr = dataurl.split(',');
-      const mime = arr[0].match(/:(.*?);/)[1];
-      const bstr = atob(arr[1]);
-      let n = bstr.length;
-      const u8arr = new Uint8Array(n);
-      while (n--) u8arr[n] = bstr.charCodeAt(n);
-      return new Blob([u8arr], { type: mime });
-    }
-
-    function gerarQRCode(link) {
-      qrDiv.innerHTML = `
-        <h3 style="color:#FFD700;text-align:center">Escaneie para baixar</h3>
-        <div id="qrcode" style="margin:0 auto"></div>
-        <a href="${link}" style="color:#FFD700;display:block;margin-top:10px" target="_blank">
-          Link direto
-        </a>
-      `;
-      new QRCode(document.getElementById("qrcode"), {
-        text: link,
-        width: 200,
-        height: 200,
-        colorDark: "#000000",
-        colorLight: "#ffffff"
-      });
-      scrollToElement(qrDiv);
-    }
-
-    // Inicialização da câmera
-    navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: 'user' },
-      audio: false
-    }).then(stream => {
-      video.srcObject = stream;
-    }).catch(err => {
-      console.error("Erro na câmera:", err);
     });
   </script>
 </body>
