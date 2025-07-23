@@ -2,16 +2,9 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#FFA500">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FOTOSHOWFEST - 15 anos Geovanna</title>
-    <link rel="stylesheet" href="/style.css">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="icon" href="/icons/icon-192.png">
-    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
@@ -46,23 +39,6 @@
         <button id="clear-gallery" class="clear-btn">Limpar Galeria</button>
     </div>
 
-    <audio id="beep-sound" src="beep.mp3" preload="auto"></audio>
-
-    <script>
-        // Registra Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('service-worker.js')
-                    .then(registration => console.log('SW registered: scope', registration.scope))
-                    .catch(err => console.log('SW registration failed:', err));
-            });
-        }
-        
-        // Verifica se está em modo standalone
-        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
-            console.log('Running in standalone mode');
-        }
-    </script>
     <script src="script.js"></script>
 </body>
 </html>
