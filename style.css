@@ -6,12 +6,6 @@ body {
     padding: 0;
     text-align: center;
     overflow-x: hidden;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -khtml-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
 }
 
 .header {
@@ -194,16 +188,4 @@ body {
     border-radius: 5px;
     cursor: pointer;
     text-transform: uppercase;
-}
-
-@media all and (display-mode: standalone) {
-    body {
-        overflow: hidden;
-        height: 100vh;
-        background-color: #000;
-    }
-    
-    .header {
-        padding-top: env(safe-area-inset-top);
-    }
 }
