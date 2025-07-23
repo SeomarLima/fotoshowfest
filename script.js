@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // Elementos DOM
     const video = document.getElementById('video');
     const captureBtn = document.getElementById('capture-btn');
     const countdown = document.getElementById('countdown');
@@ -9,76 +8,44 @@ document.addEventListener('DOMContentLoaded', function() {
     const gallery = document.getElementById('gallery');
     const clearGalleryBtn = document.getElementById('clear-gallery');
     const currentTimeDisplay = document.getElementById('current-time');
-    const beepSound = document.getElementById('beep-sound');
     
-    // Configurações
     const IMGBB_API_KEY = '586fe56b6fe8223c90078eae64e1d678';
     const MAX_PHOTOS = 10;
     let stream = null;
-    let backButtonCount = 0;
     
-    // Controle de Navegação
-    function setupNavigationControls() {
-        // Tratamento do botão voltar (para Cordova/PhoneGap)
-        document.addEventListener('backbutton', handleBackButton, false);
-        
-        // Tratamento do botão voltar (para navegador)
-        window.onpopstate = function(event) {
-            if (resultContainer.style.display === 'block') {
-                resultContainer.style.display = 'none';
-                history.pushState(null, null, window.location.pathname);
-            } else {
-                handleBackButton({preventDefault: () => {}});
-            }
-        };
-        
-        // Impede fechar o app com gestos
-        window.addEventListener('beforeunload', function(e) {
-            if (!confirm('Deseja realmente sair do app?')) {
-                e.preventDefault();
-                e.returnValue = '';
-            }
-        });
-    }
-    
-    function handleBackButton(e) {
-        e.preventDefault();
-        
-        // Se estiver mostrando o QR code, volta para a câmera
-        if (resultContainer.style.display === 'block') {
-            resultContainer.style.display = 'none';
-            backButtonCount = 0;
-            return;
-        }
-        
-        // Se estiver na câmera, conta os cliques para sair
-        backButtonCount++;
-        
-        if (backButtonCount === 1) {
-            alert('Pressione Voltar novamente para sair');
-            setTimeout(() => { backButtonCount = 0; }, 2000);
-        } else if (backButtonCount >= 2) {
-            if (confirm('Deseja realmente sair do app?')) {
-                // Tenta fechar o app de diferentes formas
-                if (typeof navigator.app !== 'undefined' && navigator.app.exitApp) {
-                    navigator.app.exitApp();
-                } else if (window.close) {
-                    window.close();
-                } else {
-                    window.location.href = 'about:blank';
-                }
-            } else {
-                backButtonCount = 0;
-            }
-        }
-    }
-    
-    // Funções principais do app
+    // Atualiza o relógio
     function updateClock() {
         const now = new Date();
         const timeString = now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes();
         currentTimeDisplay.textContent = timeString;
     }
+    
+    setInterval(updateClock, 1000);
+    updateClock();
+    
+    // Carrega a galeria do localStorage
+    loadGallery();
+    
+    // Inicia a câmera
+    startCamera();
+    
+    captureBtn.addEventListener('click', takePhoto);
+    clearGalleryBtn.addEventListener('click', clearGallery);
+    
+    // Adiciona evento para rolar para o topo quando clicar no botão
+    captureBtn.addEventListener('click', function() {
+        const cameraContainer = document.querySelector('.camera-container');
+        const cameraRect = cameraContainer.getBoundingClientRect();
+        const headerHeight = document.querySelector('.header').offsetHeight;
+        
+        // Verifica se a câmera está escondida atrás do cabeçalho
+        if (cameraRect.top < headerHeight) {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+    });
     
     async function startCamera() {
         try {
@@ -98,7 +65,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function takePhoto() {
-        beepSound.play().catch(e => console.log("Não foi possível reproduzir som:", e));
+        resetCameraPosition();
         
         let counter = 3;
         countdown.textContent = counter;
@@ -107,7 +74,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const countdownInterval = setInterval(() => {
             counter--;
             countdown.textContent = counter;
-            if (counter > 0) beepSound.play().catch(e => {});
             
             if (counter <= 0) {
                 clearInterval(countdownInterval);
@@ -115,6 +81,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 captureImage();
             }
         }, 1000);
+    }
+    
+    function resetCameraPosition() {
+        // Implementação para redefinir a posição da câmera se necessário
     }
     
     async function captureImage() {
@@ -126,69 +96,88 @@ document.addEventListener('DOMContentLoaded', function() {
         const ctx = canvas.getContext('2d');
         
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        ctx.drawImage(document.getElementById('moldura'), 0, 0, canvas.width, canvas.height);
+        
+        const moldura = document.getElementById('moldura');
+        ctx.drawImage(moldura, 0, 0, canvas.width, canvas.height);
+        
+        // Obter a imagem em dois formatos
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
         
         try {
-            // Salva localmente
-            const imageUrl = await saveToDevice(canvas);
+            // 1. Salvar localmente no dispositivo
+            await saveToDeviceGallery(imageDataUrl);
             
-            // Envia para ImgBB e gera QR Code
-            await uploadToImgBB(canvas, imageUrl);
+            // 2. Enviar para o ImgBB
+            const formData = new FormData();
+            formData.append('image', blob);
             
+            const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // 3. Salvar na galeria interna do app
+                savePhotoLocally(data.data.url, canvas);
+                
+                // 4. Gerar QR Code
+                generateQRCode(data.data.url);
+                
+                // Mostrar resultado
+                showResult();
+            } else {
+                throw new Error('Falha ao enviar para o ImgBB');
+            }
         } catch (error) {
-            console.error('Erro:', error);
-            alert('Ocorreu um erro ao processar sua foto.');
+            console.error('Erro ao processar imagem:', error);
+            alert('Ocorreu um erro ao processar sua foto. Por favor, tente novamente.');
         } finally {
             loadingScreen.style.display = 'none';
         }
     }
     
-    async function saveToDevice(canvas) {
-        return new Promise((resolve) => {
-            canvas.toBlob(async (blob) => {
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `fotoshowfest_${Date.now()}.jpg`;
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }, 100);
-                resolve(url);
-            }, 'image/jpeg', 0.9);
-        });
+    async function saveToDeviceGallery(imageData) {
+        try {
+            const blob = dataURLtoBlob(imageData);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `fotoshowfest_${new Date().getTime()}.jpg`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+            return url;
+        } catch (error) {
+            console.error('Erro ao fazer download:', error);
+        }
+        return null;
     }
     
-    async function uploadToImgBB(canvas, imageUrl) {
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-        const formData = new FormData();
-        formData.append('image', blob);
-        
-        const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-            method: 'POST',
-            body: formData
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            savePhotoLocally(data.data.url, canvas);
-            generateQRCode(data.data.url);
-            showResult();
-        } else {
-            throw new Error('Falha no upload');
+    function dataURLtoBlob(dataURL) {
+        const arr = dataURL.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
         }
+        return new Blob([u8arr], { type: mime });
     }
     
     function savePhotoLocally(imageUrl, canvas) {
         const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-        let photos = JSON.parse(localStorage.getItem('photos') || '[]');
         
+        let photos = JSON.parse(localStorage.getItem('photos') || '[]');
         photos.unshift({
             url: dataUrl,
-            timestamp: Date.now()
+            timestamp: new Date().getTime()
         });
         
         if (photos.length > MAX_PHOTOS) {
@@ -213,30 +202,31 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function showResult() {
         resultContainer.style.display = 'block';
-        history.pushState({ showingResult: true }, null);
         
+        // Calcula a posição onde o botão "Tirar Foto" ficará logo abaixo do cabeçalho
         const header = document.querySelector('.header');
         const headerHeight = header.offsetHeight;
-        const scrollPosition = Math.min(
-            captureBtn.getBoundingClientRect().top + window.scrollY - headerHeight,
-            resultContainer.getBoundingClientRect().top + window.scrollY - headerHeight
-        );
+        const captureBtn = document.getElementById('capture-btn');
+        const btnPosition = captureBtn.getBoundingClientRect().top + window.pageYOffset - headerHeight;
+        
+        // Rola até essa posição (botão abaixo do cabeçalho) ou até o QR code, o que for menor
+        const qrPosition = resultContainer.getBoundingClientRect().top + window.pageYOffset - headerHeight;
+        const scrollToPosition = Math.min(btnPosition, qrPosition);
         
         window.scrollTo({
-            top: scrollPosition,
+            top: scrollToPosition,
             behavior: 'smooth'
         });
     }
     
     function loadGallery() {
-        gallery.innerHTML = '';
         const photos = JSON.parse(localStorage.getItem('photos') || '[]');
+        gallery.innerHTML = '';
         
         photos.forEach(photo => {
             const img = document.createElement('img');
             img.src = photo.url;
             img.alt = 'Foto da galeria';
-            img.onclick = () => window.open(photo.url, '_blank');
             gallery.appendChild(img);
         });
     }
@@ -247,22 +237,4 @@ document.addEventListener('DOMContentLoaded', function() {
             gallery.innerHTML = '';
         }
     }
-    
-    // Inicialização
-    setupNavigationControls();
-    setInterval(updateClock, 1000);
-    updateClock();
-    loadGallery();
-    startCamera();
-    
-    // Event Listeners
-    captureBtn.addEventListener('click', takePhoto);
-    clearGalleryBtn.addEventListener('click', clearGallery);
-    
-    // Restaura estado ao carregar
-    window.addEventListener('load', () => {
-        if (history.state?.showingResult) {
-            resultContainer.style.display = 'block';
-        }
-    });
 });
